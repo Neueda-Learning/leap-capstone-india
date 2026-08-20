@@ -1,0 +1,98 @@
+{
+  "data": {
+    "symbol": "INFY.NS",
+    "interval": "1d",
+    "currency": "INR",
+    "candles": [
+      {
+        "date": "2026-07-01",
+        "open": 1584.5,
+        "high": 1601.2,
+        "low": 1580.05,
+        "close": 1598.7,
+        "adjclose": 1598.7,
+        "volume": 7412300,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-02",
+        "open": 1599.0,
+        "high": 1604.85,
+        "low": 1588.4,
+        "close": 1591.25,
+        "adjclose": 1591.25,
+        "volume": 6903800,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-03",
+        "open": 1591.6,
+        "high": 1595.3,
+        "low": 1574.9,
+        "close": 1577.4,
+        "adjclose": 1577.4,
+        "volume": 8155900,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-06",
+        "open": 1578.0,
+        "high": 1583.45,
+        "low": 1570.1,
+        "close": 1572.85,
+        "adjclose": 1572.85,
+        "volume": null,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-07",
+        "open": 1573.2,
+        "high": 1590.0,
+        "low": 1572.6,
+        "close": 1588.9,
+        "adjclose": 1588.9,
+        "volume": 7028400,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-08",
+        "open": 1589.4,
+        "high": 1592.15,
+        "low": 1583.7,
+        "close": 1586.05,
+        "adjclose": 1586.05,
+        "volume": 5417600,
+        "synthetic": true
+      },
+      {
+        "date": "2026-07-09",
+        "open": 1586.5,
+        "high": 1612.4,
+        "low": 1585.2,
+        "close": 1609.75,
+        "adjclose": 1609.75,
+        "volume": 9640100,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-10",
+        "open": 1610.0,
+        "high": 1618.6,
+        "low": 1604.35,
+        "close": 1615.2,
+        "adjclose": 1615.2,
+        "volume": 8236700,
+        "synthetic": false
+      }
+    ]
+  },
+  "meta": {
+    "asOf": "2026-07-11T06:00:00Z",
+    "disclaimer": "Educational data. Not for investment use.",
+    "symbol": "INFY.NS",
+    "source": "mixed",
+    "stale": false,
+    "partial": true,
+    "availableFrom": "2016-01-04"
+  }
+}

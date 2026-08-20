@@ -1,0 +1,588 @@
+openapi: 3.1.0
+
+info:
+  title: Portfolio and P&L service
+  version: 1.0.0
+  summary: Priced holdings, cost basis, and realised and unrealised profit and loss per account.
+  description: |
+    Binding contract for the Portfolio and P&L extension, built in Sprint 10. Mandatory for this
+    programme, and safe to build first, because none of the other extensions depend on it.
+
+    These routes are served by the Trade REST API on 8080, as a module beside the order and
+    account routes. They are not a separate deployable.
+
+    ## Why this is a separate set of routes
+
+    The Trade REST API already returns positions. It returns them unpriced: quantity and average
+    cost, nothing more. Pricing a position needs a live quote, and pulling a quote inside the order
+    write path would put a third-party HTTP call, with its own latency and its own failure modes,
+    into the transaction that records a trade. That is the wrong trade-off for a system of record.
+
+    These routes read the same positions, price them against the Fauxnance API, compute profit and
+    loss, and are allowed to fail without stopping anyone from trading. Keep the module's own
+    failure contained: a pricing outage answers on these paths and leaves order placement alone.
+
+    ## Where the numbers come from
+
+    | Figure | Source |
+    |---|---|
+    | Quantity, average cost | `positions` in Postgres, or a projection maintained from `trade-events` |
+    | Last price | Fauxnance `GET /quotes?symbols=A,B,C`, batched, maximum 25 symbols per call |
+    | Cash balance | Trade REST API `GET /api/v1/accounts/{id}/balance` |
+    | Realised profit and loss | Computed from the sell orders in `orders`, or accumulated from `trade-events` |
+
+    Batch the quote call. One request covering 25 symbols costs the same single unit of quota as one
+    request covering one symbol. A per-position loop over ten holdings burns ten times the quota for
+    the same answer, and the daily quota is 2000.
+
+    ## Definitions
+
+    Get these right; they are the assessment.
+
+    - **Cost basis** for a position is `quantity * averageCost`. Average cost is weighted: a buy
+      recalculates it as `(oldQty * oldAvg + newQty * fillPrice) / (oldQty + newQty)`. A sell reduces
+      quantity and leaves average cost unchanged.
+    - **Market value** is `quantity * lastPrice`.
+    - **Unrealised profit and loss** is `marketValue - costBasis`. It changes with every price tick
+      and is never persisted as a fact.
+    - **Realised profit and loss** is booked at the moment of a sell:
+      `(fillPrice - averageCostAtSale) * quantitySold`. Once booked it never changes, so it is
+      accumulated, not recomputed from current prices.
+    - **Total portfolio value** is `cashBalance + sum(marketValue)`.
+
+    A common error is to compute realised profit and loss from today's price. Realised profit and
+    loss has nothing to do with today's price.
+
+    ## Staleness
+
+    Fauxnance serves delayed quotes and can return a stale value when its upstreams are unavailable.
+    Every priced figure therefore carries `priceAsOf` and `stale`. Render a stale portfolio with a
+    visible marker rather than hiding it, and never present a stale valuation as live.
+
+    If pricing is unavailable for every symbol, return `503` with `MKT-503`. If pricing is
+    unavailable for some symbols, return `200`, omit the price on those positions, set their `stale`
+    to `true`, and set `partial` on the summary.
+  contact:
+    name: Enterprise Trading Platform, programme materials
+  license:
+    name: Instructional use only
+
+servers:
+  - url: http://localhost:8080
+    description: Local development.
+  - url: http://trade-api:8080
+    description: Service name inside the Docker Compose network.
+
+tags:
+  - name: Portfolio
+    description: Priced holdings and portfolio totals.
+  - name: P&L
+    description: Realised and unrealised profit and loss.
+  - name: Operations
+    description: Liveness.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/portfolio/{accountId}:
+    get:
+      tags: [Portfolio]
+      operationId: getPortfolioSummary
+      summary: Get the portfolio summary
+      description: |
+        Cash, total market value, total cost basis and the profit and loss totals for one account,
+        priced at the time of the call.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Portfolio summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioSummary'
+              examples:
+                summary:
+                  value:
+                    accountId: 1
+                    baseCurrency: USD
+                    cashBalance: 24500.75
+                    marketValue: 65120.00
+                    costBasis: 61300.00
+                    unrealisedPnl: 3820.00
+                    unrealisedPnlPercent: 6.23
+                    realisedPnl: 1145.50
+                    totalValue: 89620.75
+                    positionCount: 3
+                    partial: false
+                    asOf: '2026-10-19T14:05:11Z'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '503':
+          $ref: '#/components/responses/PricingUnavailable'
+
+  /api/v1/portfolio/{accountId}/positions:
+    get:
+      tags: [Portfolio]
+      operationId: getPricedPositions
+      summary: Get priced positions
+      description: |
+        Every open holding with its cost basis, its current market value and its unrealised profit
+        and loss. Positions with a net quantity of zero are excluded.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+        - name: symbol
+          in: query
+          required: false
+          description: Restrict to one instrument.
+          schema:
+            type: string
+            maxLength: 20
+      responses:
+        '200':
+          description: Priced holdings.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PricedPosition'
+              examples:
+                positions:
+                  value:
+                    - accountId: 1
+                      symbol: AAPL
+                      quantity: 200
+                      averageCost: 228.40
+                      costBasis: 45680.00
+                      lastPrice: 232.71
+                      marketValue: 46542.00
+                      unrealisedPnl: 862.00
+                      unrealisedPnlPercent: 1.89
+                      currency: USD
+                      priceAsOf: '2026-10-19T14:04:58Z'
+                      stale: false
+                    - accountId: 1
+                      symbol: INFY.NS
+                      quantity: 40
+                      averageCost: 1580.25
+                      costBasis: 63210.00
+                      lastPrice: null
+                      marketValue: null
+                      unrealisedPnl: null
+                      unrealisedPnlPercent: null
+                      currency: INR
+                      priceAsOf: null
+                      stale: true
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '503':
+          $ref: '#/components/responses/PricingUnavailable'
+
+  /api/v1/portfolio/{accountId}/pnl:
+    get:
+      tags: [P&L]
+      operationId: getPnl
+      summary: Get profit and loss
+      description: |
+        Realised and unrealised profit and loss for the account, optionally broken down by
+        instrument. `from` and `to` bound the realised figure only. Unrealised profit and loss is
+        always as at now, because it is a function of the current price.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+        - name: from
+          in: query
+          required: false
+          description: Include realised profit and loss booked on or after this date.
+          schema:
+            type: string
+            format: date
+          example: '2026-09-01'
+        - name: to
+          in: query
+          required: false
+          description: Include realised profit and loss booked on or before this date.
+          schema:
+            type: string
+            format: date
+          example: '2026-10-19'
+        - name: bySymbol
+          in: query
+          required: false
+          description: Include the per-instrument breakdown.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Profit and loss for the account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PnlResponse'
+              examples:
+                pnl:
+                  value:
+                    accountId: 1
+                    baseCurrency: USD
+                    from: '2026-09-01'
+                    to: '2026-10-19'
+                    realisedPnl: 1145.50
+                    unrealisedPnl: 3820.00
+                    totalPnl: 4965.50
+                    bySymbol:
+                      - symbol: AAPL
+                        realisedPnl: 1145.50
+                        unrealisedPnl: 862.00
+                        totalPnl: 2007.50
+                    asOf: '2026-10-19T14:05:11Z'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+        '503':
+          $ref: '#/components/responses/PricingUnavailable'
+
+  /health:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      security: []
+      summary: Liveness and dependency status
+      description: |
+        Reports the service and the state of its two dependencies. It returns `200` while the
+        service itself is running; a failing dependency degrades `status`, it does not fail the
+        response. Copy the pattern from the Fauxnance health endpoint.
+      responses:
+        '200':
+          description: Service status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    dependencies:
+                      - name: postgres
+                        status: ok
+                      - name: fauxnance
+                        status: ok
+                        quotaRemaining: 1873
+                    asOf: '2026-10-19T14:05:11Z'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        The same access token the Trade REST API accepts, issued by the auth service. The signature
+        is verified as it is on every other `/api/**` route, and each route here compares the
+        `accountId` claim against the path parameter before it reads anything. Sharing a process with
+        the order book does not make that check optional; it makes it the one that matters.
+
+  parameters:
+    AccountIdPath:
+      name: accountId
+      in: path
+      required: true
+      description: The numeric account key, `ACCOUNTS.id`. Must match the token's `accountId` claim.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+
+  responses:
+    Unauthorised:
+      description: Missing, malformed, expired or wrongly signed token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    Forbidden:
+      description: |
+        The token is valid but its `accountId` claim does not match the account requested. Return
+        this, not `404`, and log it: a customer probing another customer's portfolio is the exact
+        access-control failure the Sprint 10 security review looks for.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            forbidden:
+              value:
+                errorCode: ACC-403
+                message: Account not accessible
+    AccountNotFound:
+      description: No account exists with that key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                errorCode: ACC-404
+                message: Account not found
+    InvalidInput:
+      description: The request failed field validation, for example `from` later than `to`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
+    PricingUnavailable:
+      description: |
+        No price could be obtained for any held instrument. Returned when Fauxnance is unreachable
+        or the daily quota is exhausted. Positions and cost basis are still available from
+        `GET /api/v1/accounts/{id}/positions` on the Trade REST API, so the UI should degrade to
+        unpriced holdings rather than showing an empty portfolio.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unavailable:
+              value:
+                errorCode: MKT-503
+                message: Pricing unavailable
+
+  schemas:
+
+    PortfolioSummary:
+      type: object
+      additionalProperties: false
+      required: [accountId, baseCurrency, cashBalance, marketValue, costBasis, unrealisedPnl, realisedPnl, totalValue, positionCount, partial, asOf]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        baseCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: |
+            ISO 4217 code the totals are expressed in. Holdings in another currency must be
+            converted before they are summed. Fauxnance serves `FX:` pairs for that. A team that
+            cannot convert must restrict its instrument universe to one currency and say so.
+        cashBalance:
+          type: number
+          format: double
+        marketValue:
+          type: number
+          format: double
+          description: Sum of position market values.
+        costBasis:
+          type: number
+          format: double
+        unrealisedPnl:
+          type: number
+          format: double
+        unrealisedPnlPercent:
+          type: [number, 'null']
+          format: double
+          description: |
+            Percentage points against cost basis. `6.23` means 6.23 per cent. Null when cost basis
+            is zero.
+        realisedPnl:
+          type: number
+          format: double
+          description: Lifetime realised profit and loss for the account.
+        totalValue:
+          type: number
+          format: double
+          description: Cash plus market value.
+        positionCount:
+          type: integer
+          format: int32
+        partial:
+          type: boolean
+          description: True when at least one holding could not be priced.
+        asOf:
+          type: string
+          format: date-time
+
+    PricedPosition:
+      type: object
+      additionalProperties: false
+      required: [accountId, symbol, quantity, averageCost, costBasis, currency, stale]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        symbol:
+          type: string
+          maxLength: 20
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        averageCost:
+          type: number
+          format: double
+          description: Weighted average cost per unit, carried from the position record.
+        costBasis:
+          type: number
+          format: double
+          description: quantity multiplied by averageCost.
+        lastPrice:
+          type: [number, 'null']
+          format: double
+          description: Latest Fauxnance quote. Null when the instrument could not be priced.
+        marketValue:
+          type: [number, 'null']
+          format: double
+        unrealisedPnl:
+          type: [number, 'null']
+          format: double
+        unrealisedPnlPercent:
+          type: [number, 'null']
+          format: double
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: The instrument's own currency, from `INSTRUMENTS.currency`.
+        priceAsOf:
+          type: [string, 'null']
+          format: date-time
+          description: Observation time of the quote used, from the Fauxnance response.
+        stale:
+          type: boolean
+          description: |
+            True when the quote is past its freshness window or could not be fetched. Surface it in
+            the UI. Do not silently present a stale price as current.
+
+    PnlResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, baseCurrency, realisedPnl, unrealisedPnl, totalPnl, asOf]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        baseCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        from:
+          type: [string, 'null']
+          format: date
+          description: Lower bound applied to realised profit and loss. Null when unbounded.
+        to:
+          type: [string, 'null']
+          format: date
+        realisedPnl:
+          type: number
+          format: double
+          description: Booked at sale. Independent of the current price.
+        unrealisedPnl:
+          type: number
+          format: double
+          description: As at `asOf`, from current quotes.
+        totalPnl:
+          type: number
+          format: double
+        bySymbol:
+          type: array
+          description: Present only when `bySymbol=true`.
+          items:
+            $ref: '#/components/schemas/SymbolPnl'
+        asOf:
+          type: string
+          format: date-time
+
+    SymbolPnl:
+      type: object
+      additionalProperties: false
+      required: [symbol, realisedPnl, unrealisedPnl, totalPnl]
+      properties:
+        symbol:
+          type: string
+          maxLength: 20
+        realisedPnl:
+          type: number
+          format: double
+        unrealisedPnl:
+          type: number
+          format: double
+        totalPnl:
+          type: number
+          format: double
+
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, dependencies, asOf]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        dependencies:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, status]
+            properties:
+              name:
+                type: string
+                enum: [postgres, fauxnance, kafka, trade-api]
+              status:
+                type: string
+                enum: [ok, degraded, down]
+              quotaRemaining:
+                type: [integer, 'null']
+                description: Fauxnance only, from `GET /usage`. Poll it rarely; it costs quota.
+        asOf:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [ACC-404, ACC-403, AUTH-401, VAL-422, MKT-503]
+          description: |
+            | Code | HTTP | Meaning |
+            |---|---|---|
+            | `ACC-404` | 404 | Account not found |
+            | `ACC-403` | 403 | Account not accessible with this token |
+            | `AUTH-401` | 401 | Unauthorised or invalid token |
+            | `VAL-422` | 422 | Invalid input |
+            | `MKT-503` | 503 | Pricing unavailable for every held instrument |
+
+            `MKT-503` extends the platform error catalogue and is scoped to services that price
+            against a market feed. The four codes above it are the platform codes, used unchanged.
+        message:
+          type: string

@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListTargetBucket",
+      "Effect": "Allow",
+      "Action": [
+        "REPLACE_WITH_THE_BUCKET_LEVEL_ACTION"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET_NAME"
+    },
+    {
+      "Sid": "WriteObjectsInTargetBucket",
+      "Effect": "Allow",
+      "Action": [
+        "REPLACE_WITH_THE_OBJECT_LEVEL_ACTIONS"
+      ],
+      "Resource": "arn:aws:s3:::REPLACE_BUCKET_NAME/*"
+    },
+    {
+      "Sid": "InvalidateTargetDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "REPLACE_WITH_THE_INVALIDATION_ACTIONS"
+      ],
+      "Resource": "arn:aws:cloudfront::REPLACE_ACCOUNT_ID:distribution/REPLACE_DISTRIBUTION_ID"
+    }
+  ]
+}

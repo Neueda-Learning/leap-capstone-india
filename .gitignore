@@ -1,0 +1,52 @@
+# Secrets and local configuration
+.env
+.env.local
+*.local.env
+
+# Java and Maven
+target/
+*.class
+*.jar
+*.war
+.mvn/wrapper/maven-wrapper.jar
+
+# Node, TypeScript and Angular
+node_modules/
+dist/
+build/
+.angular/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# Databases and local data dumps
+*.duckdb
+*.sqlite
+*.sqlite3
+*.db
+
+# IDEs and editors
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Operating system
+.DS_Store
+Thumbs.db

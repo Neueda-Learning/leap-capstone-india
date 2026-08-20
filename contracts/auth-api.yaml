@@ -1,0 +1,383 @@
+openapi: 3.1.0
+
+info:
+  title: Auth service
+  version: 1.0.0
+  summary: Registration, login, token refresh and current-user lookup for the Enterprise Trading Platform.
+  description: |
+    Binding contract for the NestJS auth service built in Sprint 8. The Trade REST API and Angular
+    UI must depend on this contract rather than on implementation details.
+
+    ## JWT claims contract
+
+    This section is normative. A token that does not carry exactly these claims breaks the Trade
+    REST API's authorisation check.
+
+    | Claim | Type | Meaning |
+    |---|---|---|
+    | `sub` | string | The user identifier. A UUID. Stable for the life of the user. Not the username, not the email, because both can change. |
+    | `accountId` | integer | The numeric trading account key, `ACCOUNTS.id`. The Trade REST API compares this against the account in the request path or body and returns `ACC-403` if they differ. |
+    | `roles` | array of string | Authorisation roles. `CUSTOMER` for a normal trading user, `ADMIN` for an operator. Always present, never empty. |
+    | `iat` | integer | Issued-at, seconds since the Unix epoch. |
+    | `exp` | integer | Expiry, seconds since the Unix epoch. Fifteen minutes after `iat` for an access token. |
+    | `iss` | string | Issuer. Use `auth-service` for the Sprint 8 service. Consumers must validate the configured issuer. |
+
+    Decoded example:
+
+    ```json
+    {
+      "sub": "8f14e45f-ceea-4c1b-9d3b-1a2b3c4d5e6f",
+      "accountId": 1,
+      "roles": ["CUSTOMER"],
+      "iat": 1790000000,
+      "exp": 1790000900,
+      "iss": "auth-service"
+    }
+    ```
+
+    Signing: `HS256` with a shared secret in development, read from `JWT_SECRET`. The auth service
+    and Trade REST API must use the same algorithm and secret. Move to `RS256` with a published public key
+    if a team wants the Trade REST API to verify without holding the signing secret. That is a
+    documented upgrade, not a requirement.
+
+    Lifetimes: access token 15 minutes, refresh token 7 days. Access tokens are not revocable, which
+    is why they are short. Refresh tokens are stored and can be revoked.
+
+    ## Security rules
+
+    These are assessed in the Sprint 8 security review.
+
+    - Store passwords with argon2id or bcrypt at cost 12 or above. Never MD5, never SHA-256, never
+      an unsalted hash.
+    - Never log a password, a token, or a refresh token, including inside an error object.
+    - Return the same response body, the same status and comparable timing for an unknown user and
+      for a wrong password. A different response for each is a user enumeration vulnerability.
+    - Rotate the refresh token on every refresh, and invalidate the one that was presented. A
+      refresh token that is presented twice indicates theft: revoke the whole chain.
+    - Validate the signature, the expiry and the issuer on every protected request. Never trust a
+      decoded payload that has not had its signature checked.
+    - Do not put anything in a JWT that you would not publish. The payload is base64, not encrypted.
+  contact:
+    name: Enterprise Trading Platform, programme materials
+  license:
+    name: Instructional use only
+
+servers:
+  - url: http://localhost:3000
+    description: Local development.
+  - url: http://auth-service:3000
+    description: Service name inside the Docker Compose network.
+
+tags:
+  - name: Auth
+    description: Registration, login and token lifecycle.
+  - name: Profile
+    description: The authenticated user.
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      security: []
+      summary: Register a user
+      description: |
+        Creates a user and links it to an existing trading account. It does not create the trading
+        account: accounts are owned by the Trade REST API's schema and seeded in Sprint 3. Registering
+        against an unknown `accountId` fails validation.
+
+        Registration does not return tokens. The client logs in afterwards. Returning a session from
+        a registration endpoint makes the endpoint an unauthenticated session factory, and any
+        weakness in it becomes an authentication bypass.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '409':
+          description: The username is already taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                taken:
+                  value:
+                    errorCode: AUTH-409
+                    message: Registration failed
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      summary: Log in and receive tokens
+      description: |
+        Verifies the credentials and issues an access token and a refresh token. Every failure,
+        whatever its cause, returns the same `AUTH-401` body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              login:
+                value:
+                  username: priya.menon
+                  password: 'correct horse battery staple'
+      responses:
+        '200':
+          description: Authenticated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refresh
+      security: []
+      summary: Exchange a refresh token for a new token pair
+      description: |
+        Consumes the presented refresh token and issues a new pair. The presented token stops working
+        immediately. Presenting a token that has already been consumed is treated as theft: revoke
+        every refresh token for that user and return `AUTH-401`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: A new token pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/me:
+    get:
+      tags: [Profile]
+      operationId: getCurrentUser
+      summary: Get the authenticated user
+      description: |
+        Returns the user identified by the access token. Protected. The UI calls it after login to
+        populate the dashboard greeting and to learn which account to address.
+
+        Read the identity from the verified token, never from a query parameter or a header the
+        client controls. Accepting a client-supplied user identifier here is OWASP A01.
+      responses:
+        '200':
+          description: The authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: An access token issued by `/auth/login` or `/auth/refresh`.
+
+  responses:
+    Unauthorised:
+      description: |
+        Authentication failed. Returned for an unknown username, a wrong password, an expired token,
+        a wrongly signed token, a consumed refresh token and a malformed header. The body is
+        identical in every case, on purpose.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    InvalidInput:
+      description: The request failed field validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
+
+  schemas:
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, accountId]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+          pattern: '^[a-zA-Z0-9._-]+$'
+          example: priya.menon
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: |
+            Minimum twelve characters. Length beats character-class rules, so do not impose a
+            symbol requirement that pushes users towards a shorter password.
+          writeOnly: true
+        accountId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The numeric trading account key, `ACCOUNTS.id`, that this user will trade.
+          example: 1
+        roles:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Role'
+          description: |
+            Optional. Defaults to `["CUSTOMER"]`. Ignore this field on a public registration route
+            unless the caller already holds an `ADMIN` token. Accepting a self-declared role is a
+            privilege-escalation bug, and the Sprint 8 security review looks for it.
+      example:
+        username: priya.menon
+        password: 'correct horse battery staple'
+        accountId: 1
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        password:
+          type: string
+          maxLength: 128
+          writeOnly: true
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          description: The refresh token issued by the previous login or refresh.
+
+    TokenResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: Signed JWT carrying the claims contract described in the service description.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4ZjE0ZTQ1Zi1jZWVhLTRjMWItOWQzYi0xYTJiM2M0ZDVlNmYifQ.signature
+        refreshToken:
+          type: string
+          description: Opaque, stored server-side, revocable, rotated on every use.
+          example: 9c1f7a2e4b6d8e0a2c4e6a8c0e2a4c6e8a0c2e4a6c8e0a2c
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          description: Access token lifetime in seconds.
+          example: 900
+
+    UserResponse:
+      type: object
+      additionalProperties: false
+      required: [id, username, accountId, roles]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The value carried in the `sub` claim.
+          example: 8f14e45f-ceea-4c1b-9d3b-1a2b3c4d5e6f
+        username:
+          type: string
+          example: priya.menon
+        accountId:
+          type: integer
+          format: int64
+          description: The numeric trading account key, `ACCOUNTS.id`.
+          example: 1
+        roles:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Role'
+          example: [CUSTOMER]
+        createdOn:
+          type: string
+          format: date-time
+          example: '2026-10-05T08:00:00Z'
+
+    Role:
+      type: string
+      enum: [CUSTOMER, ADMIN]
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      description: |
+        The same envelope the Trade REST API uses, so the Angular UI has one error handler.
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, AUTH-409, VAL-422]
+          description: |
+            | Code | HTTP | Meaning |
+            |---|---|---|
+            | `AUTH-401` | 401 | Unauthorised or invalid token |
+            | `AUTH-409` | 409 | Username already taken |
+            | `VAL-422` | 422 | Invalid input |
+
+            `AUTH-409` extends the platform error catalogue and is scoped to this service. The
+            catalogue in `trade-api.yaml` has no registration-conflict code because registration is
+            not a trading operation.
+          example: AUTH-401
+        message:
+          type: string
+          description: |
+            Deliberately vague on this service. `Unauthorised` and `Registration failed` are the
+            only two messages that should appear on a failure path, because a more helpful message
+            tells an attacker which half of the credential pair was wrong.
+          example: Unauthorised
+
+security:
+  - bearerAuth: []

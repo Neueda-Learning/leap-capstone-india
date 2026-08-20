@@ -1,0 +1,85 @@
+{
+  "data": {
+    "symbol": "TATASTEEL.BO",
+    "interval": "1d",
+    "currency": "INR",
+    "candles": [
+      {
+        "date": "2026-07-01",
+        "open": 168.4,
+        "high": 170.15,
+        "low": 167.8,
+        "close": 169.5,
+        "adjclose": 169.5,
+        "volume": 21204800,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-01",
+        "open": 168.4,
+        "high": 170.15,
+        "low": 167.8,
+        "close": 168.95,
+        "adjclose": 168.95,
+        "volume": 21204800,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-02",
+        "open": 169.6,
+        "high": 172.4,
+        "low": 169.1,
+        "adjclose": 171.72,
+        "volume": 26031200,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-06",
+        "open": "n/a",
+        "high": 174.0,
+        "low": 170.2,
+        "close": 172.45,
+        "adjclose": 172.45,
+        "volume": 18117300,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-07",
+        "open": 172.5,
+        "high": 168.1,
+        "low": 175.85,
+        "close": 173.6,
+        "adjclose": 173.6,
+        "volume": 22448900,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-08",
+        "open": 173.7,
+        "high": 176.25,
+        "low": 172.9,
+        "close": 175.8,
+        "adjclose": 175.8,
+        "volume": -1,
+        "synthetic": false
+      },
+      {
+        "date": "09/07/2026",
+        "open": 175.9,
+        "high": 178.4,
+        "low": 174.55,
+        "close": 177.7,
+        "adjclose": 177.7,
+        "volume": 19320400,
+        "synthetic": false
+      }
+    ]
+  },
+  "meta": {
+    "asOf": "2026-07-10T06:00:00Z",
+    "disclaimer": "Educational data. Not for investment use.",
+    "symbol": "TATASTEEL.BO",
+    "source": "stored",
+    "stale": false
+  }
+}

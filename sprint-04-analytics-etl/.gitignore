@@ -1,0 +1,9 @@
+# Raw pulls from Fauxnance. Rebuildable, and not a fixture.
+.cache/
+
+# The analytical store. Rebuilt by the pipeline.
+*.duckdb
+*.duckdb.wal
+
+# Editable install metadata.
+*.egg-info/

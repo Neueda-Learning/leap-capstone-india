@@ -1,0 +1,107 @@
+{
+  "data": {
+    "symbol": "RELIANCE.NS",
+    "interval": "1d",
+    "currency": "INR",
+    "candles": [
+      {
+        "date": "2026-07-01",
+        "open": 2864.0,
+        "high": 2881.35,
+        "low": 2857.2,
+        "close": 2876.9,
+        "adjclose": 2876.9,
+        "volume": 5412700,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-02",
+        "open": 2878.5,
+        "high": 2902.6,
+        "low": 2874.05,
+        "close": 2898.15,
+        "adjclose": 2898.15,
+        "volume": 6238400,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-03",
+        "open": 2899.0,
+        "high": 2911.7,
+        "low": 2885.6,
+        "close": 2890.45,
+        "adjclose": 2890.45,
+        "volume": 4907100,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-06",
+        "open": 2891.2,
+        "high": 2896.8,
+        "low": 2862.35,
+        "close": 2867.3,
+        "adjclose": 2867.3,
+        "volume": 7115600,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-07",
+        "open": 2866.4,
+        "high": 2874.9,
+        "low": 2841.15,
+        "close": 2845.8,
+        "adjclose": 2845.8,
+        "volume": 8330200,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-09",
+        "open": 2848.0,
+        "high": 2869.55,
+        "low": 2844.7,
+        "close": 2866.25,
+        "adjclose": 2866.25,
+        "volume": 6604900,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-10",
+        "open": 2867.1,
+        "high": 2888.4,
+        "low": 2863.5,
+        "close": 2884.6,
+        "adjclose": 2884.6,
+        "volume": 5893300,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-13",
+        "open": 2885.0,
+        "high": 2919.25,
+        "low": 2882.4,
+        "close": 2915.7,
+        "adjclose": 2915.7,
+        "volume": 9128500,
+        "synthetic": false
+      },
+      {
+        "date": "2026-07-14",
+        "open": 2916.35,
+        "high": 2924.8,
+        "low": 2903.6,
+        "close": 2907.95,
+        "adjclose": 2907.95,
+        "volume": 6471800,
+        "synthetic": false
+      }
+    ]
+  },
+  "meta": {
+    "asOf": "2026-07-15T06:00:00Z",
+    "disclaimer": "Educational data. Not for investment use.",
+    "symbol": "RELIANCE.NS",
+    "source": "stored",
+    "stale": false,
+    "availableFrom": "2016-01-04"
+  }
+}
