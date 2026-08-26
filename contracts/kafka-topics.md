@@ -144,7 +144,9 @@ A rejection is an event. Publish it. Notifications, analytics and the blotter al
 | Payload field | Type | Notes |
 |---|---|---|
 | `symbol` | string | Also the message key. |
-| `price` | number | Latest quoted price. |
+| `price` | number | Last observed price. Nothing trades here. |
+| `bid` | number | Sell side of the quote, below `price`. |
+| `ask` | number | Buy side of the quote, above `price`. |
 | `currency` | string, 3 characters | ISO 4217. |
 | `change` | number or null | Absolute change against previous close. |
 | `changePercent` | number or null | Percentage points. `0.09` means 0.09 per cent. |
@@ -163,6 +165,8 @@ A rejection is an event. Publish it. Notifications, analytics and the blotter al
   "payload": {
     "symbol": "AAPL",
     "price": 232.71,
+    "bid": 232.65,
+    "ask": 232.77,
     "currency": "USD",
     "change": 0.21,
     "changePercent": 0.09,
@@ -175,6 +179,8 @@ A rejection is an event. Publish it. Notifications, analytics and the blotter al
 ```
 
 `eventTime` and `quoteAsOf` differ, and the difference matters. `eventTime` is when the poller published. `quoteAsOf` is when the price was observed. Fauxnance serves delayed quotes, so a strategy service acting on `eventTime` is acting on a price that is older than it thinks.
+
+`bid` and `ask` are modelled by Fauxnance rather than observed from an order book, and it says so in `meta.spreadSource`. They are still the prices a trade settles at, so carry them. Adding them is an optional-field change, so `schemaVersion` stays at 1.
 
 Publish one message per symbol, not one message per batch. Batching the HTTP call is a quota optimisation; batching the Kafka message would break per-symbol keying and ordering.
 

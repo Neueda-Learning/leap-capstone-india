@@ -256,21 +256,31 @@ publishing risks an order that settled in Postgres and told nobody.
 
 ### The fill rule
 
+A Fauxnance quote has three prices, and the one you settle against is not
+`price`. You buy at `ask` and you sell at `bid`. `price` is the last observed
+trade and nobody transacts there.
+
 The rule is a design decision, constrained by the business rules you
 implemented in Sprint 5. The default, and the one to start from:
 
-> Fill the whole order at the current quoted price when a BUY's limit price is
-> at or above the quote, or a SELL's limit price is at or below it. Reject
+> Fill the whole order when a BUY's limit price is at or above the `ask`, or a
+> SELL's limit price is at or below the `bid`. Fill at that same side. Reject
 > otherwise.
+
+Settling both sides at `price` instead makes a buy followed by a sell cost
+nothing, so any strategy that trades often looks free when it is not. The gap
+between `bid` and `ask` is the cost of trading, and it is charged on every
+round trip. Charge it.
 
 Partial fills are out of scope, because the order status enumeration has no
 state to represent one, and there is no working state between `NEW` and a
-terminal status, so an unmarketable order is rejected rather than rested. Four
+terminal status, so an unmarketable order is rejected rather than rested. Five
 details decide whether the rule survives contact with real prices, and each is
 yours to settle and defend.
 
 | Question | Why it matters |
 |---|---|
+| Which side you compared, and which you stored | A BUY checked against `bid` fills at a price no seller is offering. The side you compare and the side you store must be the same one |
 | What price is stored | The quote carries more decimal places than the column holds. Round before the comparison, or an order can fill at a price that failed its own check |
 | Which rules are re-checked here | Rules 6 and 7 were checked at acceptance against a limit price and an older balance. Both have moved while the order sat on the topic |
 | What a suspended account does | An account suspended after the order was accepted should not trade, including on orders accepted before the suspension |

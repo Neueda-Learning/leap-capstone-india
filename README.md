@@ -110,13 +110,20 @@ receive a personal key. Send it in the `X-Api-Key` header.
 | Endpoint | Use |
 |---|---|
 | `GET /candles/{symbol}` | End-of-day OHLCV history. Sprint 4 analytics, Sprint 10 signals. |
-| `GET /quotes/{symbol}` | One delayed quote. The Trade Executor prices a fill with this. |
+| `GET /quotes/{symbol}` | One delayed two-sided quote. The Trade Executor prices a fill with this. |
 | `GET /quotes?symbols=A,B,C` | Batch quotes, up to 25 symbols, counting as one request. |
 | `GET /usage` | Your own quota status. Check it before assuming a 429 is somebody else's fault. |
 | `GET /health` | No key required. Rules out "is it the API or is it me". |
 
-The base URL is in `.env.example` and Swagger UI is at `/v1/docs` on that
-host.
+A quote carries `price`, `bid` and `ask`. You buy at the `ask` and sell at the
+`bid`. `price` is the last observed trade and nobody transacts there, so an
+order settled at `price` costs nothing to reverse and every strategy that
+trades often looks free. The gap between the two sides is the cost of trading.
+Fauxnance models that gap from each symbol's own price history rather than
+reading it off an order book, and says so in `meta.spreadSource`.
+
+The base URL is in `.env.example` and the API reference is at `/v1/docs` on
+that host.
 
 Three things about it shape your design.
 
