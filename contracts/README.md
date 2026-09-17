@@ -12,7 +12,7 @@ which is what you will be asked about in review.
 | File | What it is | First used |
 |---|---|---|
 | `trade-api.yaml` | OpenAPI 3.1 description of the Trade REST API: order placement, cancellation, account queries, balance, positions, and the error envelope with its full code catalogue. | Sprint 6, and again in Sprint 9 when the Angular client is generated from it |
-| `auth-api.yaml` | OpenAPI 3.1 description of the authentication service: register, login, refresh, and the current user. Defines the JWT claims every other service verifies. | Sprint 6 as the shape of the provided stub, Sprint 8 as the specification of the service you build |
+| `auth-api.yaml` | OpenAPI 3.1 description of the authentication service: register, login, refresh, and the current user. Defines the JWT claims every other service verifies. | Sprint 6 as the shape of the tokens your test fixture mints, Sprint 8 as the specification of the service you build |
 | `kafka-topics.md` | The topic catalogue: three topics with their keys, partition counts, retention and cleanup policy, the message envelope, the payload schema for each topic, and the producer and consumer matrix. | Sprint 7 |
 | `analytics-schema.sql` | The analytical star schema: one fact table and its dimensions, in portable ANSI SQL. The target your extract, transform, load pipeline writes into. | Sprint 4 for the dashboard, loaded in full in Sprint 7 |
 | `portfolio-api.yaml` | OpenAPI 3.1 description of the Portfolio and P&L service: priced holdings, cost basis, and realised and unrealised profit and loss. | Sprint 10 |
